@@ -1,0 +1,37 @@
+pipeline {
+  agent any
+  stages {
+    stage("Pass env variables") {
+      steps {
+        sh 'echo "BUILD_NUMBER=${BUILD_NUMBER} > .env.dev'
+      }
+    }
+    stage("Install dependencies via poetry") {
+      steps {
+        sh 'poetry export --format requirements.txt --without-hashes --output docker/indexer/requirements.txt'
+      }
+    }
+    stage('Prune Docker data') {
+      steps {
+        sh 'docker system prune -a --volumes -f'
+      }
+    }
+    stage('Start container') {
+      steps {
+        sh 'docker compose up --detach --build --no-color'
+        sh 'docker compose ps'
+      }
+    }
+    stage('Run tests against the container') {
+      steps {
+        sh 'curl -XGET "http://localhost:9200/_search?q=superman&pretty"'
+        sh 'curl -XGET "http://localhost:9200/_cat/indices"'
+      }
+    }
+  }
+  post {
+    always {
+      sh 'docker compose down --remove-orphans -v'
+    }
+  }
+}
